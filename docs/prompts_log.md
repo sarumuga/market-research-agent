@@ -24,9 +24,72 @@ kept for the course's "prompts you used during vibe coding" deliverable.
   (LangChain `@tool` wrappers: `web_search`, `news_search`), mirroring the
   kit's `youcom_client.py` / `youcom_tools.py` split.
 
+## Session 3 — State schema
+
+- Wrote `graph/state.py`: `AgentState` (TypedDict) and `CompetitorReport`
+  (Pydantic). `final_reports` and `status_log` use
+  `Annotated[list, operator.add]` so each loop iteration appends.
+- Added `CLAUDE.md` as a project brief so each new Claude Code session
+  starts with the decisions made so far.
+
+## Session 4 — Graph nodes
+
+- Prompt: "Implement graph/nodes.py with three functions: discovery_node,
+  researcher_node, and analyst_node, operating on AgentState. Use the
+  web_search and news_search tools. Use ChatGroq with
+  .with_structured_output(CompetitorReport) for the analyst node. Follow the
+  guardrails and status_log conventions described in CLAUDE.md."
+- Decision: Discovery also uses structured output (a small `CompetitorList`
+  model) instead of parsing free text, so the queue is always a clean list
+  of names. Post-processing dedupes, drops the target company, caps at 3.
+- Decision: only the Analyst pops `competitor_queue`; the Researcher just
+  reads `competitor_queue[0]`. Keeps the "current competitor" unambiguous
+  across the two nodes, and the router only has to check for an empty queue.
+- Decision: `raw_research` has no reducer, so the Researcher returns the
+  full merged dict rather than just the new entry.
+- Guardrails from the kit went into the Analyst system prompt verbatim in
+  spirit: no invented details, no assumed features/pricing, "Data not
+  found" for missing fields, concise with no marketing language.
+- Robustness: if the Groq call fails for one competitor, the Analyst
+  appends a placeholder "Data not found" report and still pops the queue,
+  so one bad response doesn't abort the whole run. Researcher/Analyst
+  no-op safely if Discovery returns an empty queue.
+- LLM is created lazily (`_get_llm`, cached) so importing the module
+  doesn't require `GROQ_API_KEY`. Model: `llama-3.3-70b-versatile`, temp 0.
+- Verified with an offline smoke test (search + LLM mocked): 3 competitors
+  flow through the Researcher -> Analyst loop and produce 3 reports with
+  the expected status_log lines.
+
+## Session 5 — Router, graph wiring, Streamlit UI
+
+- Prompt: "Build these files as well graph/nodes.py, then router.py,
+  build_graph.py, app.py" (nodes.py was already done in Session 4).
+- `graph/router.py`: `queue_router` returns "researcher" while the queue
+  has items, else END.
+- Decision: the router is also used as a conditional edge right after
+  Discovery, not just after the Analyst, so a run with zero competitors
+  ends cleanly instead of passing through no-op Researcher/Analyst steps.
+- `graph/build_graph.py`: `build_graph()` plus an `initial_state()` helper
+  so the UI (and tests) always start with every AgentState key populated.
+- `app.py`: uses `graph.stream(..., stream_mode="updates")` instead of
+  `invoke()` so each node's `status_log` lines show up live in an
+  `st.status` box — matches the kit's live-progress UX. Reports are shown as
+  expandable cards (pricing, positioning, features, recent news), and a
+  footer notes that human review is the final step.
+- Issue found in the first live run: Groq returned 404 for
+  `llama-3.3-70b-versatile` — that model has been retired. Listed the
+  models on the key and switched the default to `openai/gpt-oss-120b`
+  (strongest general model available), made it overridable via a
+  `GROQ_MODEL` env var, and documented it in `.env.example`. User
+  confirmed keeping `openai/gpt-oss-120b` as the project's model.
+- Verified: mocked graph test (3-competitor loop + empty-discovery path),
+  live CLI run for "Figma" (Canva, Framer, Sketch; ~17s; correct "Data not
+  found" for Sketch's recent news), and a simulated UI run for "Notion"
+  via Streamlit's AppTest (3 cards, no errors).
+- Observation: discovery quality varies — "Notion" gave Airtable, Craft
+  Agents, Scribe. Candidate for prompt/query tuning in the E2E phase.
+
 ## Next up
 
-- `graph/state.py`: AgentState + CompetitorReport schema
-- `graph/nodes.py`, `graph/router.py`, `graph/build_graph.py`
-- `app.py`: Streamlit UI
-- End-to-end test with a real company name
+- More end-to-end testing; tune Discovery if needed
+- `docs/architecture.md`
