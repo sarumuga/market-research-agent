@@ -17,15 +17,17 @@ web/news topic split via `topic="general"` vs `topic="news"`).
 ## Architecture (LangGraph)
 
 ```
-Streamlit UI -> Discovery Node -> Researcher Node (loops per competitor)
-                                        |  ^
-                                        v  |
-                                   Analyst Node -> Queue Router
-                                        |
-                          (loop back to Researcher until queue empty)
-                                        |
-                                       END -> Streamlit displays cards
+Streamlit UI -> Discovery -> Queue Router --(empty)--> END
+                                  |
+                              (not empty)
+                                  v
+                  +-------> Researcher -> Analyst -> Queue Router --(empty)--> END
+                  |                                       |               |
+                  +-------------(not empty)---------------+               v
+                                                          Streamlit displays cards
 ```
+
+Full write-up: `docs/architecture.md`.
 
 Same 3-node + queue-router pattern as the reference kit. Human review is
 the final step — the graph intentionally stops after generating reports;
@@ -89,10 +91,15 @@ no DB writes, emails, or automated actions.
   `CompetitorReport` entries plus the expected search call counts. Run with
   `python -m pytest` (`pytest.ini` puts the repo root on the import path).
 
+- `docs/architecture.md` — course-submission architecture write-up, based
+  on the actual code: overview, graph diagram, node-by-node breakdown, why
+  the reducer loop works, guardrails, human-in-the-loop boundary, and
+  deviations from the reference kit. Keep it in sync when the graph changes.
+
 ## Not yet built (next steps, in order)
 
-1. `docs/architecture.md` write-up (for course submission doc) —
-   deliberately deferred for now
+Nothing outstanding from the original plan. All planned files are built
+and documented.
 
 ## Conventions to keep
 

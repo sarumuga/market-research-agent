@@ -160,6 +160,28 @@ kept for the course's "prompts you used during vibe coding" deliverable.
   extra discovery search and still passes.
 - Cost: one extra Tavily search per run (2 in Discovery instead of 1).
 
+## Session 8 — Architecture write-up
+
+- Prompt: "Write docs/architecture.md documenting the actual current
+  implementation (read the real code ... don't just restate CLAUDE.md,
+  since some things there are already stale)", with a set structure:
+  overview, diagram, node-by-node breakdown, why the loop works,
+  guardrails, human-in-the-loop boundary, deviations from the kit.
+- Wrote the doc from the code in `graph/`, `tools/`, `prompts/` and
+  `app.py`. It includes a state table (key, type, reducer, which node
+  writes it) and explains why `competitor_queue` must *not* use
+  `operator.add` (the queue would never empty, so the loop would never
+  end) and why `raw_research` is returned as a full merged dict.
+- Also documented a subtlety: `stream_mode="updates"` yields each node's
+  output before reducers apply, so `app.py` builds up reports and log
+  lines itself.
+- Deviations section: only the you.com → Tavily and Llama 3.3 70B →
+  gpt-oss-120b swaps are described as kit differences. Other changes are
+  listed as implementation changes rather than claims about what the kit
+  did.
+- Fixed a stale diagram in `CLAUDE.md`: it showed Discovery going straight
+  to the Researcher, but the router now runs after Discovery too.
+
 ## Next up
 
-- `docs/architecture.md` (deferred)
+- Nothing outstanding from the original plan.
