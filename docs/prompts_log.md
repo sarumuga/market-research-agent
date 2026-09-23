@@ -117,7 +117,49 @@ kept for the course's "prompts you used during vibe coding" deliverable.
   `requirements.txt` and a `pytest.ini` (`pythonpath = .`) so
   `python -m pytest` works from the repo root. Result: 1 passed in 0.29s.
 
+## Session 7 — Discovery quality
+
+- Prompt: "Do the discovery improvement first."
+- Baseline (old: one query "top competitors and alternatives to X"):
+  - Notion -> Airtable, Craft Agents, Scribe
+  - Figma -> Canva, Framer, Sketch
+  - Slack -> social.plus, Granola, Glue
+  - Stripe -> Moneris, Plexo, Trace Finance
+  - Zoom -> Webex, Whereby, LiveKit
+  - Canva -> Stability AI, Bending Spoons, Juicebox
+- Diagnosis: the single search was dominated by CB Insights
+  "alternatives" pages, which list niche startups first. The prompt said
+  "only use names from the results, most direct first", so the model copied
+  that page's order. The Notion results also contained a different "Notion"
+  (a smart-lock company), so name collisions were a risk too.
+- Changes (all in `graph/nodes.py`):
+  - Two differently-phrased queries ("X top competitors", "best X
+    alternatives compared") run concurrently and are combined, so no single
+    listing site dominates.
+  - `CompetitorList` gained a `category` field placed *before*
+    `competitors`, so the model states the target's product category and
+    customers before picking. Logged to `status_log` so users can see
+    what market the agent assumed.
+  - Prompt rewritten as steps (identify the product and resolve same-name
+    companies, then pick rivals selling the same kind of product to the
+    same customers) with rules: prefer established products that appear in
+    several sources, don't copy one site's ranking, and exclude
+    sub-products, owned companies, and integrations/add-ons. Kept the
+    "only names from the search results" grounding rule.
+- After:
+  - Notion -> Airtable, Coda, ClickUp
+  - Figma -> Sketch, Adobe XD, InVision
+  - Slack -> Microsoft Teams, Mattermost, Rocket.Chat
+  - Stripe -> Adyen, PayPal (Braintree), Checkout.com
+  - Zoom -> Microsoft Teams, Google Meet, Cisco Webex
+  - Canva -> Adobe Express, Visme, Crello/VistaCreate
+- Verified: re-run gave the same picks (Crello vs. VistaCreate is the same
+  product after a rebrand); Linear -> Jira, Shortcut, ClickUp; nonsense
+  input "asdfqwer" still ends cleanly with no competitors; full live run
+  for Notion completed in ~13s with 3 reports; smoke test updated for the
+  extra discovery search and still passes.
+- Cost: one extra Tavily search per run (2 in Discovery instead of 1).
+
 ## Next up
 
-- More end-to-end testing; tune Discovery if needed
 - `docs/architecture.md` (deferred)

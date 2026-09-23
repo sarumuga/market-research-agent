@@ -54,10 +54,16 @@ no DB writes, emails, or automated actions.
   iteration *appends* rather than overwrites — required because the
   Researcher/Analyst pair runs once per competitor in a loop.
 - `graph/nodes.py` — `discovery_node`, `researcher_node`, `analyst_node`.
-  Discovery does one `web_search` and uses Groq structured output
-  (`CompetitorList`) to pick 3 competitors (deduped, target company
-  excluded). Researcher runs `web_search` + `news_search` **concurrently**
-  (`ThreadPoolExecutor`, 2 workers) on `competitor_queue[0]` and stores the text in `raw_research` (returns the
+  Discovery runs two differently-phrased `web_search` queries
+  concurrently (`DISCOVERY_QUERIES`) so no single listing site dominates,
+  then uses Groq structured output (`CompetitorList`: `category` first,
+  then `competitors`) to pick 3 competitors. The prompt makes the model
+  name the target's product category first (also resolves same-name
+  companies), then prefer established rivals in that category that appear
+  in several sources; results are deduped with the target excluded, and the
+  category is logged to `status_log`. Researcher runs `web_search` +
+  `news_search` **concurrently** (`ThreadPoolExecutor`, 2 workers) on
+  `competitor_queue[0]` and stores the text in `raw_research` (returns the
   full merged dict, since that key has no reducer). Analyst builds a
   `CompetitorReport` from that text with the guardrail prompt (imported
   from `prompts/analyst_prompt.py`), then pops
@@ -85,10 +91,7 @@ no DB writes, emails, or automated actions.
 
 ## Not yet built (next steps, in order)
 
-1. More end-to-end testing with real company names; tune the Discovery
-   query/prompt if competitor picks look off (e.g. a "Notion" run returned
-   Airtable, Craft Agents, Scribe — Coda/Confluence would be expected)
-2. `docs/architecture.md` write-up (for course submission doc) —
+1. `docs/architecture.md` write-up (for course submission doc) —
    deliberately deferred for now
 
 ## Conventions to keep

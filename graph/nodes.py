@@ -33,8 +33,14 @@ MAX_COMPETITORS = 3
 
 
 class CompetitorList(BaseModel):
-    """Structured-output target for the Discovery node."""
+    """Structured-output target for the Discovery node. `category` comes
+    first so the model pins down what the target sells before it picks
+    competitors (also disambiguates companies that share a name)."""
 
+    category: str = Field(
+        description="The target company's main product category and "
+        "customers, e.g. 'collaborative design tool for product teams'."
+    )
     competitors: list[str] = Field(
         description="Names of the top direct competitors, most relevant first."
     )
@@ -47,21 +53,45 @@ def _get_llm() -> ChatGroq:
     return ChatGroq(model=os.getenv("GROQ_MODEL", DEFAULT_GROQ_MODEL), temperature=0)
 
 
-DISCOVERY_SYSTEM_PROMPT = """You identify direct competitors of a company \
+# Two differently-phrased queries so no single listing site (e.g. one
+# database's "top competitors" page) dominates the evidence.
+DISCOVERY_QUERIES = [
+    "{company} top competitors",
+    "best {company} alternatives compared",
+]
+
+DISCOVERY_SYSTEM_PROMPT = """You identify the direct competitors of a company \
 using the search results provided.
 
+Steps:
+1. Decide what the target company's main product is and who buys it. If \
+the results mention different companies with the same name, use the \
+best-known one and ignore the others.
+2. Pick the {n} companies that most directly compete with that product: \
+they sell the same kind of product to the same customers.
+
 Rules:
-- Return exactly {n} competitor company or product names, most direct first.
 - Only use names that appear in the search results. Do not invent companies.
-- Do not include the target company itself or its own sub-products.
-- Return names only, no descriptions."""
+- Prefer established, widely used products that appear in several sources \
+over niche startups or tools named by only one listing site. Do not simply \
+copy one site's ranking order.
+- Exclude the target company itself, its own sub-products, companies it \
+owns, and tools that only integrate with or add on to it.
+- Return names only, no descriptions, most direct competitor first."""
 
 
 def discovery_node(state: AgentState) -> dict:
     company = state["company_name"]
     log = [f"Discovery: Scanning market for '{company}' competitors..."]
 
-    results = web_search.invoke({"query": f"top competitors and alternatives to {company}"})
+    with ThreadPoolExecutor(max_workers=len(DISCOVERY_QUERIES)) as pool:
+        futures = [
+            pool.submit(web_search.invoke, {"query": q.format(company=company)})
+            for q in DISCOVERY_QUERIES
+        ]
+        results = "\n\n".join(
+            f"SEARCH {i}:\n{f.result()}" for i, f in enumerate(futures, start=1)
+        )
 
     llm = _get_llm().with_structured_output(CompetitorList)
     response = llm.invoke(
@@ -82,6 +112,7 @@ def discovery_node(state: AgentState) -> dict:
     competitors = competitors[:MAX_COMPETITORS]
 
     if competitors:
+        log.append(f"Discovery: Market category: {response.category}")
         log.append(f"Discovery: Found competitors: {', '.join(competitors)}")
     else:
         log.append(f"Discovery: No competitors found for '{company}'.")

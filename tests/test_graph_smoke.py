@@ -33,7 +33,8 @@ def _fake_llm():
         runnable = MagicMock()
         if schema is nodes.CompetitorList:
             runnable.invoke.return_value = nodes.CompetitorList(
-                competitors=COMPETITORS
+                category="Collaborative design tools",
+                competitors=COMPETITORS,
             )
         else:
             runnable.invoke.return_value = CompetitorReport(
@@ -71,7 +72,7 @@ def test_graph_produces_three_competitor_reports(fakes):
     assert [r["competitor_name"] for r in reports] == COMPETITORS
 
     assert final["competitor_queue"] == []
-    # 1 discovery search + 1 web search per competitor; 1 news search each.
-    assert web.invoke.call_count == 1 + len(COMPETITORS)
+    # Discovery web searches + 1 web search per competitor; 1 news search each.
+    assert web.invoke.call_count == len(nodes.DISCOVERY_QUERIES) + len(COMPETITORS)
     assert news.invoke.call_count == len(COMPETITORS)
     assert any(line.startswith("Discovery:") for line in final["status_log"])
