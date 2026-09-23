@@ -89,7 +89,35 @@ kept for the course's "prompts you used during vibe coding" deliverable.
 - Observation: discovery quality varies — "Notion" gave Airtable, Craft
   Agents, Scribe. Candidate for prompt/query tuning in the E2E phase.
 
+## Session 6 — README vs. implementation gaps
+
+- Prompt: "Fix these gaps between README.md and the actual implementation:
+  (1) correct the model reference to openai/gpt-oss-120b; (2) in
+  researcher_node, run the web_search and news_search calls concurrently ...
+  and update the README's 'parallel' claim to match reality once it's true;
+  (3) move the analyst system prompt out of graph/nodes.py into
+  prompts/analyst_prompt.py and import it; (4) add a minimal smoke test in
+  tests/test_graph_smoke.py ... Leave docs/architecture.md for now."
+- (1) README now names `openai/gpt-oss-120b` as the Groq model.
+- (2) `researcher_node` submits both searches to a 2-worker
+  `ThreadPoolExecutor`. Chose threads over `asyncio.gather` because the
+  graph and Tavily client are synchronous; threads avoid making the whole
+  node async for two I/O calls. Verified with two fake searches that each
+  sleep 1s: the node takes 1.0s instead of 2s. A live Tavily call for one
+  competitor took ~1.7s. README wording changed to "concurrent web + news
+  search (both searches run in parallel threads)", which is now accurate.
+- (3) `prompts/analyst_prompt.py` holds `ANALYST_SYSTEM_PROMPT` and
+  `NOT_FOUND`; `graph/nodes.py` imports both. Added `prompts/__init__.py`
+  to match the `graph/` and `tools/` packages. Discovery prompt left in
+  `nodes.py` since only the analyst prompt was in scope.
+- (4) `tests/test_graph_smoke.py`: offline test that monkeypatches the
+  search tools and the LLM factory, runs the compiled graph for "Figma",
+  and asserts 3 reports that validate as `CompetitorReport`, an empty
+  queue, and the expected search call counts. Added `pytest` to
+  `requirements.txt` and a `pytest.ini` (`pythonpath = .`) so
+  `python -m pytest` works from the repo root. Result: 1 passed in 0.29s.
+
 ## Next up
 
 - More end-to-end testing; tune Discovery if needed
-- `docs/architecture.md`
+- `docs/architecture.md` (deferred)

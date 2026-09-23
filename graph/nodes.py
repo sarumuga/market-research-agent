@@ -2,8 +2,8 @@
 The three worker nodes of the market research graph.
 
     discovery_node  -> finds the top-3 competitors, fills competitor_queue
-    researcher_node -> web + news search for the competitor at the head
-                       of the queue, stores the text in raw_research
+    researcher_node -> concurrent web + news search for the competitor at
+                       the head of the queue, stores the text in raw_research
     analyst_node    -> turns that raw text into a CompetitorReport via
                        Groq structured output, then pops the queue
 
@@ -16,19 +16,20 @@ to status_log so the Streamlit UI can show live progress.
 """
 
 import os
+from concurrent.futures import ThreadPoolExecutor
 from functools import lru_cache
 
 from langchain_groq import ChatGroq
 from pydantic import BaseModel, Field
 
 from graph.state import AgentState, CompetitorReport
+from prompts.analyst_prompt import ANALYST_SYSTEM_PROMPT, NOT_FOUND
 from tools.search_tools import news_search, web_search
 
 # Llama 3.3 70B (the kit's model) has been retired on Groq; gpt-oss-120b is
 # the strongest general model currently available there. Override via .env.
 DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b"
 MAX_COMPETITORS = 3
-NOT_FOUND = "Data not found"
 
 
 class CompetitorList(BaseModel):
@@ -54,17 +55,6 @@ Rules:
 - Only use names that appear in the search results. Do not invent companies.
 - Do not include the target company itself or its own sub-products.
 - Return names only, no descriptions."""
-
-ANALYST_SYSTEM_PROMPT = f"""You are a competitive market analyst. Build a \
-structured report on one competitor using ONLY the research provided.
-
-Guardrails:
-- Do not invent competitor details that are not present in the research.
-- Do not assume features or pricing. If pricing is not stated, say "{NOT_FOUND}".
-- Use "{NOT_FOUND}" for any field the research does not support.
-- core_features: 3-5 short items taken from the research; if none are \
-found, return ["{NOT_FOUND}"].
-- Be concise and factual. No marketing language or superlatives."""
 
 
 def discovery_node(state: AgentState) -> dict:
@@ -111,12 +101,17 @@ def researcher_node(state: AgentState) -> dict:
     competitor = state["competitor_queue"][0]
     log = [f"Researcher: Searching web and news for '{competitor}'..."]
 
-    web = web_search.invoke(
-        {"query": f"{competitor} pricing features target market"}
-    )
-    news = news_search.invoke(
-        {"query": f"{competitor} launch funding partnership"}
-    )
+    # The two searches are independent I/O calls, so run them concurrently.
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        web_future = pool.submit(
+            web_search.invoke,
+            {"query": f"{competitor} pricing features target market"},
+        )
+        news_future = pool.submit(
+            news_search.invoke,
+            {"query": f"{competitor} launch funding partnership"},
+        )
+        web, news = web_future.result(), news_future.result()
 
     # raw_research has no reducer, so return the full merged dict.
     raw_research = {

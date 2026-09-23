@@ -1,11 +1,12 @@
 # Market Research Agent
 
 A multi-agent competitive market research pipeline built with **LangGraph**,
-**LangChain**, **Groq** (Llama 3.3 70B), **Tavily Search**, and **Streamlit**.
+**LangChain**, **Groq** (`openai/gpt-oss-120b`), **Tavily Search**, and **Streamlit**.
 
 Given a company name, the agent pipeline:
 1. **Discovers** that company's top 3 competitors (web search)
-2. **Researches** each competitor via parallel web + news search
+2. **Researches** each competitor via concurrent web + news search
+   (both searches run in parallel threads)
 3. **Analyzes** raw findings into a structured report (pricing, features,
    positioning, recent news) using an LLM with structured output
 4. **Displays** results as expandable cards in a Streamlit UI
