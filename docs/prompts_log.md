@@ -182,6 +182,13 @@ kept for the course's "prompts you used during vibe coding" deliverable.
 - Fixed a stale diagram in `CLAUDE.md`: it showed Discovery going straight
   to the Researcher, but the router now runs after Discovery too.
 
+- Follow-up prompt: "Can you make the architecture a mermaid diagram".
+  Replaced the ASCII diagram with a Mermaid `flowchart TD`. The Researcher
+  is drawn as a subgraph where the web and news searches branch from a
+  "concurrent threads" node and merge into `raw_research`; an earlier
+  version stacked them vertically, which looked sequential. Checked the
+  rendering locally with `@mermaid-js/mermaid-cli`.
+
 ## Next up
 
 - Nothing outstanding from the original plan.

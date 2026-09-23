@@ -20,24 +20,27 @@ Streamlit (UI).
 
 ## Architecture diagram
 
-```
-                      Streamlit UI (app.py)
-                               │ initial_state(company)
-                               ▼
- START ──► discovery_node ──► queue_router ──(queue empty)──► END
-                                   │
-                           (queue not empty)
-                                   ▼
-                  ┌──────► researcher_node      web_search ┐ run concurrently
-                  │                │            news_search┘ (ThreadPoolExecutor)
-                  │                ▼
-                  │          analyst_node       Groq structured output
-                  │                │            → CompetitorReport, pops queue
-                  │                ▼
-                  └─(not empty)─ queue_router ──(queue empty)──► END
-                                                                  │
-                            UI renders final_reports as cards ◄───┘
-                            (human review)
+```mermaid
+flowchart TD
+    UI["Streamlit UI (app.py)"] -->|"initial_state(company)"| START([START])
+    START --> D["discovery_node<br/>2 concurrent web searches<br/>Groq → CompetitorList"]
+    D --> R1{"queue_router<br/>queue empty?"}
+    R1 -->|"yes: no competitors"| END_([END])
+    R1 -->|no| RS
+
+    subgraph RS["researcher_node: competitor_queue[0]"]
+        F(("concurrent<br/>threads"))
+        F --> W["web_search<br/>Tavily topic=general"]
+        F --> N["news_search<br/>Tavily topic=news"]
+        W --> M["raw_research[name]"]
+        N --> M
+    end
+
+    RS --> A["analyst_node<br/>Groq → CompetitorReport<br/>pops competitor_queue"]
+    A --> R2{"queue_router<br/>queue empty?"}
+    R2 -->|"no: next competitor"| RS
+    R2 -->|yes| END_
+    END_ --> H["UI renders final_reports as cards<br/>human review"]
 ```
 
 The graph is wired in `graph/build_graph.py`. `queue_router` is attached as
